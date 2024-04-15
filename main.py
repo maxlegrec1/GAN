@@ -7,7 +7,7 @@ import torchvision.utils as vutils
 import matplotlib.pyplot as plt
 import pytorch_fid
 
-from utils.dataset import create_train_valid
+from utils.train_valid import create_train_valid
 from utils.models import selected_models
 from utils.optimizers import selected_opt
 from utils.diffusion import Diffusion
@@ -37,7 +37,6 @@ def main(config):
 
     total_train_steps = 0
 
-    diffusion = Diffusion()
 
     if config["use_wandb"]:
         wandb.init(project="GAN",config=config,name = config["run_name"])
@@ -64,13 +63,10 @@ def main(config):
             #update G
             fake_images = gen()
             #blurr the images 
-            images_b,t_real = diffusion(images)
-            fake_images_b,t_fake = diffusion(fake_images)
-            
-            images_b=images
-            fake_images_b=fake_images
+    
+    
 
-            dfo = disc(fake_images_b,t_fake)
+            dfo = disc(fake_images)
 
             g_loss = loss_fun(dfo, real_label) 
             gen_opt.zero_grad()
@@ -78,10 +74,10 @@ def main(config):
             gen_opt.step()
 
            #update D
-            dro = disc(images_b,t_real)
+            dro = disc(images)
             real_loss = loss_fun(dro, real_label-(torch.rand_like(real_label)<0.1).float()) 
             #real_loss = loss_fun(disc(images,t_real), real_label) 
-            dfo = disc(fake_images_b.detach(),t_fake)
+            dfo = disc(fake_images.detach())
             fake_loss = loss_fun(dfo, fake_label)
             d_loss = (real_loss + fake_loss) / 2
             disc_opt.zero_grad()
@@ -91,14 +87,13 @@ def main(config):
             print(g_loss.item(),d_loss.item())
 
             if total_train_steps%config["training"]["plot_gen_images_freq"]== 0 :
-                '''
-                fake_images = (fake_images.detach().cpu()+1)*128
-                images_b = (images_b.detach().cpu()+1)*128
-                images = (images.detach().cpu()+1)*128
-                grid = vutils.make_grid(images_b,padding=2, normalize=True)
-                vutils.save_image(grid,os.path.join(config["run_name"],f"{total_train_steps}realblurred.png"))
+                
+                fake_images = (fake_images.detach().cpu()+1)*127.5
+                images = (images.detach().cpu()+1)*127.5
+                grid = vutils.make_grid(images,padding=2, normalize=True)
+                vutils.save_image(grid,os.path.join(config["run_name"],f"{total_train_steps}real.png"))
                 grid = vutils.make_grid(fake_images[:8],padding=2, normalize=True)
-                vutils.save_image(grid,os.path.join(config["run_name"],f"{total_train_steps}fake.png"))'''
+                vutils.save_image(grid,os.path.join(config["run_name"],f"{total_train_steps}fake.png"))
 
             #update losses
             total_train_disc_loss.append(d_loss.item())
@@ -108,15 +103,9 @@ def main(config):
 
         #perform validation in no grad
         with torch.no_grad():
-            from diffusers.models import AutoencoderKL
-            vae = AutoencoderKL.from_pretrained("stabilityai/sdxl-vae")
-            gen.batch_size=1
-            for val_step in range(100):
-                #images = next(valid)
+            for val_step in range(100//train.batch_size):
                 fake_images = gen().detach().cpu()
-                fake_images = vae.decode(fake_images).sample
                 vutils.save_image(vutils.make_grid(fake_images[0],normalize=True),f"fake_ds/{val_step}.png")
-            gen.batch_size=config["training"]["batch_size"]
 
         #calculate loss summaries
         #apply mean to the losses totals
@@ -125,8 +114,7 @@ def main(config):
         disc_fake_output = sum(disc_fake_output)/len(disc_fake_output)
         disc_real_output = sum(disc_real_output)/len(disc_real_output)
         fid = pytorch_fid.fid_score.calculate_fid_given_paths(paths=["datasets/afhq/ablation512","fake_ds"],batch_size=config["training"]["batch_size"],device="cuda",dims=2048)
-        #torch.save(gen.state_dict(), "gen.pt")
-        #torch.save(disc.state_dict(), "disc.pt")
+
         if config["use_wandb"]:
             #images = wandb.Image(grid)
             wandb.log({"train/gen_loss" : total_train_gen_loss, "train/disc_loss": total_train_disc_loss, \

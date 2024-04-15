@@ -38,6 +38,6 @@ def create_train_valid(dir,batch_size,scaling_factor):
     valid_dir = dir
 
 
-    train,valid = Dataset(train_dir,batch_size,scaling_factor), Dataset(valid_dir,1,scaling_factor)
+    train,valid = Dataset(train_dir,batch_size,scaling_factor), Dataset(valid_dir,batch_size,scaling_factor)
 
     return train,valid
