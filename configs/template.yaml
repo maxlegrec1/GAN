@@ -1,13 +1,13 @@
 run_name : "test_2"
 models : "gan"
-dataset : "datasets/afhq/latents"
+dataset : "datasets/afhq/"
 
 training:
   optimizer: "nadam"
-  batch_size: 64
+  batch_size: 32
   scaling_factor : 256
   generator_lr: 0.00005
-  discriminator_lr: 0.00001
+  discriminator_lr: 0.000025
   epochs : 1000
   plot_gen_images_freq: 100
   accumulated_steps: 1

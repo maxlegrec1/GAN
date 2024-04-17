@@ -105,8 +105,8 @@ class Identity(torch.nn.Module):
 
 class Diffusion(torch.nn.Module):
     def __init__(self,
-        beta_schedule='linear', beta_start=4e-4, beta_end=1e-4,
-        t_min=600, t_max=1000, noise_std=0.05,
+        beta_schedule='linear', beta_start=4e-4, beta_end=2e-2,
+        t_min=300, t_max=1000, noise_std=0.05,
         aug='no', ada_maxp=None, ts_dist='uniform',
     ):
         super().__init__()
@@ -182,8 +182,8 @@ class Diffusion(torch.nn.Module):
         alphas_bar_sqrt = self.alphas_bar_sqrt.to(device)
         one_minus_alphas_bar_sqrt = self.one_minus_alphas_bar_sqrt.to(device)
 
-        #t = torch.from_numpy(np.random.choice(self.t_epl, size=batch_size, replace=True)).to(device)
-        t = torch.from_numpy(np.random.choice(np.arange(1, self.t_min + 1),size = batch_size)).to(device)
+        t = torch.from_numpy(np.random.choice(self.t_epl, size=batch_size, replace=True)).to(device)
+        #t = torch.from_numpy(np.random.choice(np.arange(1, self.t_min + 1),size = batch_size)).to(device)
         x_t = q_sample(x_0, alphas_bar_sqrt, one_minus_alphas_bar_sqrt, t,
                        noise_type=self.noise_type,
                        noise_std=self.noise_std)

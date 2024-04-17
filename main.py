@@ -15,23 +15,17 @@ from utils.diffusion import Diffusion
 def main(config):
     if not os.path.exists(config["run_name"]):
         os.mkdir(config["run_name"])
+
+    if not os.path.exists("fake_ds"):
+        os.mkdir("fake_ds")
     
     train,valid = create_train_valid(config["dataset"],config["training"]["batch_size"],config["training"]["scaling_factor"])
 
     gen, disc = selected_models(config)
 
-    '''
-    from diffusers.models import AutoencoderKL
-    vae = AutoencoderKL.from_pretrained("stabilityai/sdxl-vae")
-    train.batch_size = 1
-    img = next(train).cpu()
-    img = vae.decode(img).sample
-    vutils.save_image(vutils.make_grid(img[0],normalize=True),f"test.png")
-    exit()'''
-    #gen.load_state_dict(torch.load("gen.pt"))
-    #disc.load_state_dict(torch.load("disc.pt"))
-
     gen_opt,disc_opt = selected_opt(gen,disc,config["training"])
+
+    diffusion = Diffusion()
 
     loss_fun = torch.nn.BCELoss()
 
@@ -55,7 +49,7 @@ def main(config):
         total_valid_disc_loss = []
         total_valid_gen_loss = []
 
-        for train_step in range(5*train.size//train.batch_size):
+        for train_step in range(train.size//train.batch_size):
             total_train_steps+=1
             print(train_step)
             images = next(train)
@@ -63,10 +57,11 @@ def main(config):
             #update G
             fake_images = gen()
             #blurr the images 
+            images_b,t_real = diffusion(images)
     
-    
+            fake_images_b,t_fake = diffusion(fake_images)
 
-            dfo = disc(fake_images)
+            dfo = disc(fake_images_b,t_fake)
 
             g_loss = loss_fun(dfo, real_label) 
             gen_opt.zero_grad()
@@ -74,10 +69,10 @@ def main(config):
             gen_opt.step()
 
            #update D
-            dro = disc(images)
+            dro = disc(images_b,t_real)
             real_loss = loss_fun(dro, real_label-(torch.rand_like(real_label)<0.1).float()) 
             #real_loss = loss_fun(disc(images,t_real), real_label) 
-            dfo = disc(fake_images.detach())
+            dfo = disc(fake_images_b.detach(),t_fake)
             fake_loss = loss_fun(dfo, fake_label)
             d_loss = (real_loss + fake_loss) / 2
             disc_opt.zero_grad()
@@ -103,9 +98,10 @@ def main(config):
 
         #perform validation in no grad
         with torch.no_grad():
-            for val_step in range(100//train.batch_size):
+            for val_step in range(valid.size//train.batch_size):
                 fake_images = gen().detach().cpu()
-                vutils.save_image(vutils.make_grid(fake_images[0],normalize=True),f"fake_ds/{val_step}.png")
+                for i in range(train.batch_size):
+                    vutils.save_image(vutils.make_grid(fake_images[0],normalize=True),f"fake_ds/{val_step}_{i}.png")
 
         #calculate loss summaries
         #apply mean to the losses totals
@@ -116,7 +112,7 @@ def main(config):
         fid = pytorch_fid.fid_score.calculate_fid_given_paths(paths=["datasets/afhq/ablation512","fake_ds"],batch_size=config["training"]["batch_size"],device="cuda",dims=2048)
 
         if config["use_wandb"]:
-            #images = wandb.Image(grid)
+            images = wandb.Image(grid)
             wandb.log({"train/gen_loss" : total_train_gen_loss, "train/disc_loss": total_train_disc_loss, \
                         "disc_real_output": disc_real_output, "disc_fake_output": disc_fake_output, "FID": fid})
             #plot the last images :
