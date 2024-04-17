@@ -23,8 +23,10 @@ class Dataset():
         images = []
         for _ in range(self.batch_size):
             img = torchvision.io.read_image(self.images_path[self.pointer])
-            resize = torchvision.transforms.Resize(self.scaling)(img)
-            images.append(resize)
+            img = torchvision.transforms.Resize(self.scaling)(img)
+            if random.random()<0.5:
+                img = torch.flip(img,[-1])
+            images.append(img)
             self.pointer+=1
             if self.pointer == self.size:
                 self.pointer = 0

@@ -85,7 +85,7 @@ def main(config):
                 
                 fake_images = (fake_images.detach().cpu()+1)*127.5
                 images = (images.detach().cpu()+1)*127.5
-                grid = vutils.make_grid(images,padding=2, normalize=True)
+                grid = vutils.make_grid(images[:8],padding=2, normalize=True)
                 vutils.save_image(grid,os.path.join(config["run_name"],f"{total_train_steps}real.png"))
                 grid = vutils.make_grid(fake_images[:8],padding=2, normalize=True)
                 vutils.save_image(grid,os.path.join(config["run_name"],f"{total_train_steps}fake.png"))
@@ -114,7 +114,7 @@ def main(config):
         if config["use_wandb"]:
             images = wandb.Image(grid)
             wandb.log({"train/gen_loss" : total_train_gen_loss, "train/disc_loss": total_train_disc_loss, \
-                        "disc_real_output": disc_real_output, "disc_fake_output": disc_fake_output, "FID": fid})
+                        "disc_real_output": disc_real_output, "disc_fake_output": disc_fake_output, "FID": fid, "gen_output": images})
             #plot the last images :
 
 if __name__ == "__main__":

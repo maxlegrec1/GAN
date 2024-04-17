@@ -73,7 +73,7 @@ class Discriminator(nn.Module):
 
     def forward(self, input,t):
         b,_,H,W = input.size()
-        t = t.view(-1,1,1,1)/300
+        t = t.view(-1,1,1,1)/500
         ones = torch.ones((b,1,H,W)).to("cuda") * t
         input = torch.cat([input,ones],dim = 1)
         out = self.main(input)

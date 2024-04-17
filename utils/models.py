@@ -1,4 +1,4 @@
-from models.gan5 import create_gen, create_disc
+from models.gan3 import create_gen, create_disc
 
 
 def selected_models(config):
