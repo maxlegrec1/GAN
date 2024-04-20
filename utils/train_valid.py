@@ -2,7 +2,7 @@ import os
 import random
 import torchvision
 import torch
-
+from ada import AdaptiveDiscriminatorAugmentation
 class Dataset():
     def __init__(self,dir,batch_size,scaling_factor) -> None:
         self.dir = dir
@@ -10,6 +10,23 @@ class Dataset():
         self.batch_size = batch_size
         self.images_path = []
 
+
+        self.aug = AdaptiveDiscriminatorAugmentation(
+        xflip=1, 
+        rotate90=1,
+        xint=1, 
+        scale=1, 
+        rotate=1, 
+        aniso=1,
+        xfrac=1, 
+        brightness=1, 
+        contrast=1, 
+        lumaflip=1,
+        hue=1, 
+        saturation=1,
+        ).to("cuda")
+
+        self.aug.set_p(0)
         for subdir in os.listdir(self.dir):
             subdir_path = os.path.join(self.dir,subdir)
             for image in os.listdir(subdir_path) :
@@ -26,12 +43,14 @@ class Dataset():
             img = torchvision.transforms.Resize(self.scaling)(img)
             if random.random()<0.5:
                 img = torch.flip(img,[-1])
+                
             images.append(img)
             self.pointer+=1
             if self.pointer == self.size:
                 self.pointer = 0
-        images = torch.stack(images)        
-        return (images.to("cuda").float()/127.5) - 1
+        images = (torch.stack(images).to("cuda").float()/127.5) - 1
+        images = self.aug(images)        
+        return images
 
 
 def create_train_valid(dir,batch_size,scaling_factor):

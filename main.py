@@ -31,6 +31,8 @@ def main(config):
 
     total_train_steps = 0
 
+    ins_weight = 0
+    augment_probability = 0
 
     if config["use_wandb"]:
         wandb.init(project="GAN",config=config,name = config["run_name"])
@@ -46,9 +48,11 @@ def main(config):
         total_train_disc_loss = []
         disc_real_output = []
         disc_fake_output = []
+        total_disc_accuracy = []
         total_valid_disc_loss = []
         total_valid_gen_loss = []
-
+        augment_probability = min(0.5,augment_probability)
+        #train.aug.set_p(augment_probability)
         for train_step in range(train.size//train.batch_size):
             total_train_steps+=1
             print(train_step)
@@ -61,23 +65,25 @@ def main(config):
     
             fake_images_b,t_fake = diffusion(fake_images)
 
-            dfo = disc(fake_images_b,t_fake)
+            dfo,_,ins_loss = disc(fake_images_b,t_fake)
 
-            g_loss = loss_fun(dfo, real_label) 
+            g_loss = loss_fun(dfo, real_label) + ins_weight*ins_loss
             gen_opt.zero_grad()
             g_loss.backward()
             gen_opt.step()
 
            #update D
-            dro = disc(images_b,t_real)
-            real_loss = loss_fun(dro, real_label-(torch.rand_like(real_label)<0.1).float()) 
+            dro ,ins_loss,_= disc(images_b,t_real)
+            real_loss = loss_fun(dro, real_label-(torch.rand_like(real_label)<0.1).float()) + ins_weight * ins_loss
             #real_loss = loss_fun(disc(images,t_real), real_label) 
-            dfo = disc(fake_images_b.detach(),t_fake)
-            fake_loss = loss_fun(dfo, fake_label)
+            dfo, ins_loss,_ = disc(fake_images_b.detach(),t_fake)
+            fake_loss = loss_fun(dfo, fake_label) + ins_weight * ins_loss
             d_loss = (real_loss + fake_loss) / 2
             disc_opt.zero_grad()
             d_loss.backward()
             disc_opt.step()
+
+            disc_accuracy = ((torch.sign(dro - 0.5)+1).mean() + (torch.sign(0.5-dfo)+1).mean())/4
 
             print(g_loss.item(),d_loss.item())
 
@@ -93,6 +99,7 @@ def main(config):
             #update losses
             total_train_disc_loss.append(d_loss.item())
             total_train_gen_loss.append(g_loss.item())
+            total_disc_accuracy.append(disc_accuracy.detach().cpu().item())
             disc_real_output.append(dro.detach().cpu().mean().item())
             disc_fake_output.append(dfo.detach().cpu().mean().item())
 
@@ -101,7 +108,7 @@ def main(config):
             for val_step in range(valid.size//train.batch_size):
                 fake_images = gen().detach().cpu()
                 for i in range(train.batch_size):
-                    vutils.save_image(vutils.make_grid(fake_images[0],normalize=True),f"fake_ds/{val_step}_{i}.png")
+                    vutils.save_image(vutils.make_grid(fake_images[i],normalize=True),f"fake_ds/{val_step}_{i}.png")
 
         #calculate loss summaries
         #apply mean to the losses totals
@@ -109,12 +116,20 @@ def main(config):
         total_train_disc_loss = sum(total_train_disc_loss)/len(total_train_disc_loss)
         disc_fake_output = sum(disc_fake_output)/len(disc_fake_output)
         disc_real_output = sum(disc_real_output)/len(disc_real_output)
+        total_disc_accuracy = sum(total_disc_accuracy)/len(total_disc_accuracy)
+        
+        if total_disc_accuracy>=0.95:
+            augment_probability+=0.1
+
+        if total_disc_accuracy<=0.85:
+            augment_probability-=0.1
+
         fid = pytorch_fid.fid_score.calculate_fid_given_paths(paths=["datasets/afhq/ablation512","fake_ds"],batch_size=config["training"]["batch_size"],device="cuda",dims=2048)
 
         if config["use_wandb"]:
             images = wandb.Image(grid)
             wandb.log({"train/gen_loss" : total_train_gen_loss, "train/disc_loss": total_train_disc_loss, \
-                        "disc_real_output": disc_real_output, "disc_fake_output": disc_fake_output, "FID": fid, "gen_output": images})
+                        "disc_real_output": disc_real_output, "disc_fake_output": disc_fake_output, "FID": fid, "gen_output": images, "disc accuracy": total_disc_accuracy})
             #plot the last images :
 
 if __name__ == "__main__":
