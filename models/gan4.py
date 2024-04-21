@@ -35,49 +35,95 @@ def get_loss(q, k,loss, tau=1):
 
 class Discriminator(nn.Module):
     def __init__(self):
-        nc = 3+1
+        nc = 3
         ndf = 64
         super(Discriminator, self).__init__()
-        self.main = nn.Sequential(
+
+        self.block_1 = nn.Sequential(
             nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. ``(ndf) x 32 x 32``
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),)
+        
+        self.to_many_2 = ToMany(ndf)
+        self.block_2 = nn.Sequential(nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ndf * 2),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. ``(ndf*2) x 16 x 16``
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),)
+        
+        self.to_many_3 = ToMany(ndf*2)
+        self.block_3 = nn.Sequential(nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ndf * 4),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. ``(ndf*4) x 8 x 8``
-            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),)
+        
+        self.to_many_4 = ToMany(ndf*4)
+        self.block_4 = nn.Sequential(nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(ndf * 8, ndf * 8, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),)
+        
+        self.to_many_5 = ToMany(ndf*8)
+        self.block_5 = nn.Sequential(nn.Conv2d(ndf * 8, ndf * 8, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(ndf * 8, ndf * 8, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),)
+        
+        self.to_many_6 = ToMany(ndf*8)
+        self.block_6 = nn.Sequential(nn.Conv2d(ndf * 8, ndf * 8, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),)
+        
+        self.to_many_7 = ToMany(ndf*8)
+        self.block_7 = nn.Sequential(nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            nn.Sigmoid())
 
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-            nn.Sigmoid()
-        )
+       
         self.contrast_real = torch.nn.Conv2d(ndf*8,ndf*4,1)
         self.contrast_fake = torch.nn.Conv2d(ndf*8,ndf*4,1)
         self.contrast_real_d = torch.nn.Linear(ndf*4,ndf*4,bias=False)
         self.contrast_fake_d = torch.nn.Linear(ndf*4,ndf*4,bias=False)
         self.loss = torch.nn.CrossEntropyLoss()
 
-    def forward(self, input,t):
-        b,_,H,W = input.size()
-        t = t.view(-1,1,1,1)/500
-        ones = torch.ones((b,1,H,W)).to("cuda") * t
-        input = torch.cat([input,ones],dim = 1)
-        out = self.main(input)
-        mainout = out
+    def forward(self, input):
+        rgb4,rgb8,rgb16,rgb32,rgb64,rgb128,rgb256 = input
+
+        disc4 = self.to_many_7(rgb4)
+        disc4 = self.block_7(disc4).view(-1,)
+
+        disc8 = self.to_many_6(rgb8)
+        disc8 = self.block_6(disc8)
+        disc8 = self.block_7(disc8).view(-1,)
+
+        disc16 = self.to_many_5(rgb16)
+        disc16 = self.block_5(disc16)
+        disc16 = self.block_6(disc16)
+        disc16 = self.block_7(disc16).view(-1,)
+
+        disc32 = self.to_many_4(rgb32)
+        disc32 = self.block_4(disc32)
+        disc32 = self.block_5(disc32)
+        disc32 = self.block_6(disc32)
+        disc32 = self.block_7(disc32).view(-1,)
+
+        disc64 = self.to_many_3(rgb64)
+        disc64 = self.block_3(disc64)
+        disc64 = self.block_4(disc64)
+        disc64 = self.block_5(disc64)
+        disc64 = self.block_6(disc64)
+        disc64 = self.block_7(disc64).view(-1,)
+
+        disc128 = self.to_many_2(rgb128)
+        disc128 = self.block_2(disc128)
+        disc128 = self.block_3(disc128)
+        disc128 = self.block_4(disc128)
+        disc128 = self.block_5(disc128)
+        disc128 = self.block_6(disc128)
+        disc128 = self.block_7(disc128).view(-1,)
+
+        disc256 = rgb256
+        disc256 = self.block_1(disc256)
+        disc256 = self.block_2(disc256)
+        disc256 = self.block_3(disc256)
+        disc256 = self.block_4(disc256)
+        disc256 = self.block_5(disc256)
+        disc256 = self.block_6(disc256)
+        disc256 = self.block_7(disc256).view(-1,)
+
         #print(mainout.shape)
 
         #qk_real = self.contrast_real(out).view(-1,64*4)
@@ -94,7 +140,7 @@ class Discriminator(nn.Module):
 
         #fake_loss = get_loss(q_fake,k_fake,self.loss)
 
-        return mainout.view(-1,),0,0
+        return disc4,disc8,disc16,disc32,disc64,disc128,disc256
     
 class Generator(nn.Module):
     def __init__(self,batch_size):
@@ -103,39 +149,89 @@ class Generator(nn.Module):
         nz=100
         super(Generator, self).__init__()
         self.batch_size = batch_size
-        self.main = nn.Sequential(
+
+        self.block_1 = nn.Sequential(
             nn.ConvTranspose2d(nz, ngf*8, 4, 1, 0, bias=False),
             nn.BatchNorm2d(ngf*8),
-            nn.ReLU(),
-                # state size. ``(ngf*8) x 4 x 4``
+            nn.ReLU(),)
+        #4*4
+        self.rgb_1 = ToRGB(ngf*8)
+
+        self.block_2 = nn.Sequential(
             nn.ConvTranspose2d(ngf*8, ngf*8, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf*8),
-            nn.ReLU(),
-            # state size. ``(ngf*4) x 8 x 8``
+            nn.ReLU(),)
+        #8*8
+        self.rgb_2 = ToRGB(ngf*8)
+
+        self.block_3 = nn.Sequential(
             nn.ConvTranspose2d(ngf*8, ngf*8, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf*8),
-            nn.ReLU(),
-            # state size. ``(ngf*2) x 16 x 16``
+            nn.ReLU(),)
+        #16*16
+        self.rgb_3 = ToRGB(ngf*8)
+        
+        self.block_4 = nn.Sequential(
             nn.ConvTranspose2d(ngf*8, ngf*4, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf*4),
-            nn.ReLU(),
+            nn.ReLU(),)
+        #32*32
+        self.rgb_4 = ToRGB(ngf*4)
 
-            nn.ConvTranspose2d(ngf*4, ngf*2, 4, 2, 1, bias=False),
+        self.block_5 = nn.Sequential(nn.ConvTranspose2d(ngf*4, ngf*2, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf*2),
-            nn.ReLU(),
-
+            nn.ReLU(),)
+        #64*64
+        self.rgb_5 = ToRGB(ngf*2)
+        
+        self.block_6 = nn.Sequential(
             nn.ConvTranspose2d(ngf*2, ngf*1, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf),
-            nn.ReLU(),
-
-            # state size. ``(ngf) x 32 x 32``
-            nn.ConvTranspose2d( ngf, nc, 4, 2, 1, bias=False),
-            nn.Tanh()
-        )
+            nn.ReLU(),)
+        #128*128
+        self.rgb_6 = ToRGB(ngf)
+        
+        self.block_7 = nn.Sequential(
+            nn.ConvTranspose2d( ngf, ngf, 4, 2, 1, bias=False),)
+        #256*256
+        self.rgb_7 = ToRGB(ngf)
 
     def forward(self):
         input = torch.randn(self.batch_size, 100, 1, 1, device="cuda")
-        out = self.main(input)
-        return out
+        main = self.block_1(input)
+        rgb4 = self.rgb_1(main)
+        main = self.block_2(main)
+        rgb8 = self.rgb_2(main)
+        main = self.block_3(main)
+        rgb16 = self.rgb_3(main)
+        main = self.block_4(main)
+        rgb32 = self.rgb_4(main)
+        main = self.block_5(main)
+        rgb64 = self.rgb_5(main)
+        main = self.block_6(main)
+        rgb128 = self.rgb_6(main)
+        main = self.block_7(main)
+        rgb256 = self.rgb_7(main)
+
+        return (rgb4,rgb8,rgb16,rgb32,rgb64,rgb128,rgb256)
     
 
+class ToRGB(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels,3,1) 
+    
+    def forward(self,input):
+        out = self.conv(input)
+        out = torch.tanh(out)
+
+        return out
+    
+class ToMany(nn.Module):
+    def __init__(self, out_channels):
+        super().__init__()
+        self.conv = nn.Conv2d(3,out_channels,1) 
+    
+    def forward(self,input):
+        out = self.conv(input)
+        return out

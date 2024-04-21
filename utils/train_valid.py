@@ -50,7 +50,7 @@ class Dataset():
                 self.pointer = 0
         images = (torch.stack(images).to("cuda").float()/127.5) - 1
         images = self.aug(images)        
-        return images
+        return to_many(images)
 
 
 def create_train_valid(dir,batch_size,scaling_factor):
@@ -62,3 +62,19 @@ def create_train_valid(dir,batch_size,scaling_factor):
     train,valid = Dataset(train_dir,batch_size,scaling_factor), Dataset(valid_dir,batch_size,scaling_factor)
 
     return train,valid
+
+def to_many(images):
+
+    img4 = torchvision.transforms.Resize(4)(images)
+
+    img8 = torchvision.transforms.Resize(8)(images)
+
+    img16 = torchvision.transforms.Resize(16)(images)
+
+    img32 = torchvision.transforms.Resize(32)(images)
+
+    img64 = torchvision.transforms.Resize(64)(images)
+
+    img128 = torchvision.transforms.Resize(128)(images)
+
+    return img4,img8,img16,img32,img64,img128,images

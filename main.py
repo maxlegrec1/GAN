@@ -26,8 +26,17 @@ def main(config):
     gen_opt,disc_opt = selected_opt(gen,disc,config["training"])
 
     diffusion = Diffusion()
-
-    loss_fun = torch.nn.BCELoss()
+    loss = torch.nn.BCELoss()
+    def loss_fun(x,y):
+        disc4,disc8,disc16,disc32,disc64,disc128,disc256 = x
+        loss4 = loss(disc4,y)
+        loss8 = loss(disc8,y)
+        loss16 = loss(disc16,y)
+        loss32 = loss(disc32,y)
+        loss64 = loss(disc64,y)
+        loss128 = loss(disc128,y)
+        loss256 = loss(disc256,y)
+        return (loss4+loss8+loss16+loss32+loss64+loss128+loss256)/7
 
     total_train_steps = 0
 
@@ -61,36 +70,34 @@ def main(config):
             #update G
             fake_images = gen()
             #blurr the images 
-            images_b,t_real = diffusion(images)
-    
-            fake_images_b,t_fake = diffusion(fake_images)
+            #images_b,t_real = diffusion(images)
+            #fake_images_b,t_fake = diffusion(fake_images)
 
-            dfo,_,ins_loss = disc(fake_images_b,t_fake)
-
-            g_loss = loss_fun(dfo, real_label) + ins_weight*ins_loss
+            dfo= disc(fake_images)
+            g_loss = loss_fun(dfo, real_label) 
             gen_opt.zero_grad()
             g_loss.backward()
             gen_opt.step()
 
            #update D
-            dro ,ins_loss,_= disc(images_b,t_real)
-            real_loss = loss_fun(dro, real_label-(torch.rand_like(real_label)<0.1).float()) + ins_weight * ins_loss
+            dro = disc(images)
+            real_loss = loss_fun(dro, real_label-(torch.rand_like(real_label)<0.1).float()) 
             #real_loss = loss_fun(disc(images,t_real), real_label) 
-            dfo, ins_loss,_ = disc(fake_images_b.detach(),t_fake)
-            fake_loss = loss_fun(dfo, fake_label) + ins_weight * ins_loss
+            dfo = disc((img.detach() for img in fake_images))
+            fake_loss = loss_fun(dfo, fake_label) 
             d_loss = (real_loss + fake_loss) / 2
             disc_opt.zero_grad()
             d_loss.backward()
             disc_opt.step()
 
-            disc_accuracy = ((torch.sign(dro - 0.5)+1).mean() + (torch.sign(0.5-dfo)+1).mean())/4
+            disc_accuracy = ((torch.sign(dro[-1] - 0.5)+1).mean() + (torch.sign(0.5-dfo[-1])+1).mean())/4
 
             print(g_loss.item(),d_loss.item())
 
             if total_train_steps%config["training"]["plot_gen_images_freq"]== 0 :
                 
-                fake_images = (fake_images.detach().cpu()+1)*127.5
-                images = (images.detach().cpu()+1)*127.5
+                fake_images = (fake_images[-1].detach().cpu()+1)*127.5
+                images = (images[-1].detach().cpu()+1)*127.5
                 grid = vutils.make_grid(images[:8],padding=2, normalize=True)
                 vutils.save_image(grid,os.path.join(config["run_name"],f"{total_train_steps}real.png"))
                 grid = vutils.make_grid(fake_images[:8],padding=2, normalize=True)
@@ -100,13 +107,13 @@ def main(config):
             total_train_disc_loss.append(d_loss.item())
             total_train_gen_loss.append(g_loss.item())
             total_disc_accuracy.append(disc_accuracy.detach().cpu().item())
-            disc_real_output.append(dro.detach().cpu().mean().item())
-            disc_fake_output.append(dfo.detach().cpu().mean().item())
+            disc_real_output.append(dro[-1].detach().cpu().mean().item())
+            disc_fake_output.append(dfo[-1].detach().cpu().mean().item())
 
         #perform validation in no grad
         with torch.no_grad():
             for val_step in range(valid.size//train.batch_size):
-                fake_images = gen().detach().cpu()
+                fake_images = gen()[-1].detach().cpu()
                 for i in range(train.batch_size):
                     vutils.save_image(vutils.make_grid(fake_images[i],normalize=True),f"fake_ds/{val_step}_{i}.png")
 
